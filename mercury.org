@@ -1,0 +1,113 @@
+* Why is list.length so complex?
+That lets it be tail-recursive.
+* TODO How is multi different from nondet?
+* Calling Mercury from Haskell
+Possible if Mercury uses the C calling convention.
+* installation
+Use the .deb packages, install the "jessie" version -- it worked for me.
+I also installed from source and couldn't uninstall.
+* compiling and running
+  jeff$ mmc --make hello
+    Making Mercury/cs/hello.c
+    Making Mercury/os/hello.o
+    Making hello
+  jeff$ ./hello 
+    Hello, World!
+  jeff$ 
+* syntax
+** many
+You should omit the parentheses around an if-then-else that immediately follows the else part of another if-then-else.
+All declarations start with a :- symbol.
+Declarations and clauses always end with a full stop.
+Capitalized <=> variable.
+Multiple clauses are equivalent to a disjunction.
+** single characters require single quotes, and sometimes () too
+"Literal character values in Mercury are normally enclosed in single quotes. Some characters which the Mercury parser would normally expect to see used as infix function symbols, such as + and *, also need to be enclosed in parentheses: (’+’) and (’*’)."
+** parts of a program
+A module starts with a module declaration and is followed by an interface section and an implementation section.
+Clauses go in "implementation".
+Each module must export a "main".
+* IO & determinism
+** Every predicate that performs I/O must have an io::di argument and an io::uo argument, and must be deterministic.
+ :- pred main(io::di, io::uo) is det.
+ "This says that we are going to define a predicate called main with two arguments of type io (which happens to be defined in the io module), the first of which is a destructive input argument, and the second of which is a unique output argument; the is det part tells us that main is a deterministic predicate"
+** shorthand for IO arguments
+for threading IO in and out variables across multiple IO operations:
+
+ "Naming all these intermediate states quickly becomes tedious, so Mercury provides us with syntactic sugar in the form of state variables: 
+ main(!IO) :-
+   io.write_string("Hello, ", !IO),
+   io.write_string("World!", !IO),
+   io.nl(!IO).
+ This code is transformed by the compiler into something equivalent to the preceding example: each occurrence of the !IO state variable actually stands for two normal variables"
+* disjunctions (switches) are better than nested if-else
+because the compiler can check for totality
+* arguments & pattern matching
+** “Filling in” the arguments of a clause is just shorthand for omitting the equivalent unification goals.
+rot13_2(’a’, ’n’).   
+is syntactic sugar for
+rot13_2(V1, V2) :- V1 = ’a’, V2 = ’n’.
+* types
+** defining new types
+ :- type suit ---> clubs ; diamonds ; hearts ; spades.
+ :- type playing_card  --->  card(rank, suit) ; joker.
+ :- type bank_account ---> account( 
+      name  :: string,
+      account_no :: int,
+      funds :: float ).
+** extract fields with ^ (or pattern-match)
+BankAcct^funds
+** updating fields : verbose and strange-looking
+`Thing^field := value` returns something equal to Thing except with `field` changed to `value`:
+
+( if BankAcct^funds >= RequestedSum then
+NewBankAcct = (BankAcct^funds := BankAcct^funds - RequestedSum)
+else
+... reject debit request ...
+)
+** Nested fields can be updated. 
+The expression Employee^contact^address := NewAddr denotes a copy of Employee with ...
+** PITFALL : Parentheses can change the type of an update expression
+(Employee^contact)^address := NewAddr denotes an updated copy of the contact field of the employee data constructor (i.e., the type of this expression is contact_details, not employee.)
+** it is also possible to explicitly define field access functions
+"for instance for “virtual fields” that are computed rather than stored in a data constructor or for update functions that perform sanity checks on their arguments."
+** polymorphism (type variables)
+:- type tree(T) ---> leaf ; branch(tree(T), T, tree(T)).
+** type and mode+det declarations can be separate
+  :- pred filter(   pred(T) :: in( pred(in) is semidet )
+                  , list(T) :: in
+                  , list(T) :: out
+                  , list(T) :: out
+                ) is det.
+is equivalent to
+  :- pred filter( pred(T)                   , list(T), list(T), list(T) ).
+  :- mode filter( in( pred(in) is semidet ) , in     , out    , out 
+                ) is det.
+* mode
+** inverting input and output is possible
+by using multiple mode declarations:
+:- pred phone(string, int).
+:- mode phone(in, out) is semidet.
+:- mode phone(out, in) is nondet.
+* TODO ? code gets reordered
+** I don't understand
+** can be problematic
+"a bad idea to write something like ( if X \= 0, Z = Y / X then ... else ... ), assuming that the test for X being non-zero will guarantee that this code cannot lead to a division-by-zero error at run-time. It is certainly possible that the test and the division may be compiled the other way around."
+* free, ground and other "insts"
+** in and out modes are (?defined) in terms of free and ground
+:- mode in == (ground >> ground).
+:- mode out == (free >> ground).
+That is, an in mode argument of a goal must be ground (i.e., be instantiated
+with some value) before the goal is executed and will also be ground after-
+wards, while an out mode argument must be free (i.e., not instantiated)
+before the goal is executed, but will be ground afterwards.
+** in(type) and out(type) are shorthand
+  :- mode in(I) == (I >> I).
+  :- mode out(I) == (free >> I).
+* is this dependent typing?
+Section 3.5 of tutorial:
+:- mode head(in(non_empty_list), out) is det.
+* cc_nondet and cc_multi
+** "There may be multiple solutions to a cc predicate, but you will only get one of them."
+** It's hard to use
+" all goals following a committed-choice goal must be guaranteed to succeed."
